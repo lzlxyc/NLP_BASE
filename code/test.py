@@ -1,7 +1,10 @@
-from itertools import permutations  # 排列函数
-from operator import itemgetter # 获取可迭代对象某个位置的值
-from tqdm import tqdm
 
+
+
+# 31、短语的语序问题
+from itertools import permutations  # 排列函数
+from operator import itemgetter  # 获取可迭代对象某个位置的值
+from tqdm import tqdm
 def short_sentence_re_order(text:str='德景陶镇瓷'):
     """
     通过2-gram，进行短语的重新排列，得到概率最大的排列
@@ -62,5 +65,95 @@ def short_sentence_re_order(text:str='德景陶镇瓷'):
     return res[0][0]
 
 
+
+# 48、文本纠错之获取形近字
+import pygame
+import json
+import cv2
+import os
+import numpy as np
+from tqdm import tqdm
+from scipy.spatial.distance import cosine
+from operator import itemgetter
+pygame.init()
+
+
+def get_words_pic():
+    '''step1：将汉字转为图片保存'''
+    word_path = r"G:\知识萃取\NLP\系统学习\NLP_BASE\data\static\汉字-拼音.json"
+    with open(word_path,'r',encoding='utf-8') as file:
+        word_list = json.load(file)
+    word_list = set([word.strip() for word in list(word_list.keys()) if len(word.strip())==1])
+    # 通过pygame将汉字转化为黑白图片
+    for char in tqdm(word_list):
+        try:
+            font = pygame.font.Font("C:\Windows\Fonts\simkai.ttf", 100)
+            rtext = font.render(char, True, (0, 0, 0), (255, 255, 255))
+            save_path = f"../data/word_pic/{char}.png"
+            pygame.image.save(rtext,save_path)
+        except Exception as e:
+            print('error:',e)
+            continue
+
+def pic2vector(pic_path):
+    """step2.1:将一张图片转为向量表示"""
+    # 读取图片
+    img = cv2.imdecode(np.fromfile(pic_path,dtype=np.uint8), -1)
+    # 将图片转为灰度模式
+    img = cv2.cvtColor(img,cv2.COLOR_BGR2GRAY).reshape(-1, 1)
+    return [_[0] for _ in img.tolist()]
+
+
+def get_all_word_vectors():
+    '''step2.2:获取所有字的向量表示'''
+    dir_path = '../data/word_pic/'
+    pic_path_list = [os.path.join(dir_path,pic) for pic in os.listdir(dir_path) if pic.endswith('png')]
+    # pic_path_list = pic_path_list[:10]
+    pic_vector_dict = {} # 每个汉字对应的向量表示
+    for pic_path in tqdm(pic_path_list):
+        pic_vector_dict[pic_path.split('.png')[0][-1]] = pic2vector(pic_path)
+
+    with open('../data/word_vectors.json','w',encoding='utf-8') as file:
+        json.dump(pic_vector_dict,file,ensure_ascii=False)
+
+
+# def cal_cos_similary(vec1:list,vec2:list):
+#     '''step3:计算两个向量的余弦相似度,范围[-1,1]'''
+#     return 1 - cosine(vec2, vec2)
+
+# 计算两个向量之间的余弦相似度
+def cal_cos_similary(vector1, vector2):
+    dot_product = 0.0
+    normA = 0.0
+    normB = 0.0
+    for a, b in zip(vector1, vector2):
+        dot_product += a * b
+        normA += a ** 2
+        normB += b ** 2
+    if normA == 0.0 or normB == 0.0:
+        return 0
+    else:
+        return dot_product / ((normA ** 0.5) * (normB ** 0.5))
+
+
+def get_shape_similary_word(input_word='国',top_n=10):
+    """
+    原理：计算两个汉字的形近字，通过获取汉字的图片的向量表示，再利用余弦相似度计算两个汉字的相似度
+    step1：将汉字转为图片保存
+    step2: 获取每个汉字的向量表示
+    step3：余弦相似度计算汉字的相似度
+    :return:
+    """
+    with open('../data/word_vectors.json','r',encoding='utf-8') as file:
+        pic_vector_dict = json.load(file)
+    print("获取前10个形近字")
+    input_vec = pic_vector_dict.get(input_word,None)
+    if not input_vec:
+        print(f"数据中不存在{input_word}字")
+        return []
+    similary_dict = {word:cal_cos_similary(input_vec,word_vec) for word,word_vec in tqdm(pic_vector_dict.items())}
+    similary_dict = sorted(similary_dict.items(),key=itemgetter(1),reverse=True)[:top_n]
+    print(similary_dict)
+
 if __name__ == '__main__':
-    short_sentence_re_order()
+    get_shape_similary_word()
